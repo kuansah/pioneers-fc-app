@@ -9,7 +9,7 @@ on:
 jobs:
   build:
     name: Build Android APK
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
 
     steps:
       - name: Checkout project
@@ -23,11 +23,12 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-
           sudo apt-get install -y \
             git \
             zip \
             unzip \
+            wget \
+            curl \
             openjdk-17-jdk \
             python3-pip \
             autoconf \
@@ -35,68 +36,65 @@ jobs:
             libtool \
             pkg-config \
             zlib1g-dev \
-            libncurses-dev \
+            libncurses5-dev \
+            libncursesw5-dev \
             cmake \
             libffi-dev \
             libssl-dev
 
-      - name: Set up Java
+      - name: Set Java
         run: |
           echo "JAVA_HOME=$JAVA_HOME_17_X64" >> "$GITHUB_ENV"
           echo "$JAVA_HOME_17_X64/bin" >> "$GITHUB_PATH"
 
-      - name: Set up Android SDK
+      - name: Install Android SDK
         run: |
-          mkdir -p "$HOME/android-sdk/cmdline-tools"
+          mkdir -p "$HOME/.buildozer/android/platform"
 
-          cd "$HOME/android-sdk"
+          cd "$HOME/.buildozer/android/platform"
 
-          wget -q https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip
+          wget -q \
+            https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip \
+            -O cmdline-tools.zip
 
-          unzip -q commandlinetools-linux-13114758_latest.zip \
-            -d "$HOME/android-sdk/cmdline-tools"
+          mkdir -p cmdline-tools
 
-          mv "$HOME/android-sdk/cmdline-tools/cmdline-tools" \
-             "$HOME/android-sdk/cmdline-tools/latest"
+          unzip -q cmdline-tools.zip -d cmdline-tools
 
-          echo "ANDROID_HOME=$HOME/android-sdk" >> "$GITHUB_ENV"
-          echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> "$GITHUB_ENV"
+          mv cmdline-tools/cmdline-tools cmdline-tools/latest
 
-          echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
-          echo "$HOME/android-sdk/platform-tools" >> "$GITHUB_PATH"
-          echo "$HOME/android-sdk/build-tools/35.0.0" >> "$GITHUB_PATH"
+          echo "ANDROID_HOME=$HOME/.buildozer/android/platform" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$HOME/.buildozer/android/platform" >> "$GITHUB_ENV"
 
-      - name: Install Android SDK packages
+          echo "$HOME/.buildozer/android/platform/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          echo "$HOME/.buildozer/android/platform/platform-tools" >> "$GITHUB_PATH"
+          echo "$HOME/.buildozer/android/platform/build-tools/35.0.0" >> "$GITHUB_PATH"
+
+      - name: Install Android packages
         run: |
           yes | sdkmanager --licenses || true
 
           sdkmanager \
             "platform-tools" \
             "platforms;android-35" \
-            "build-tools;35.0.0" \
-            "cmdline-tools;latest"
+            "build-tools;35.0.0"
 
-      - name: Locate AIDL
+      - name: Verify AIDL
         run: |
-          echo "Searching for AIDL..."
+          echo "AIDL locations:"
+          find "$ANDROID_HOME" -type f -name "aidl" -print
 
-          find "$ANDROID_HOME" -type f -name aidl -print
+          AIDL=$(find "$ANDROID_HOME" -type f -name "aidl" | head -n 1)
 
-          AIDL_PATH=$(find "$ANDROID_HOME" -type f -name aidl | head -n 1)
-
-          if [ -z "$AIDL_PATH" ]; then
-            echo "ERROR: AIDL was not installed."
+          if [ -z "$AIDL" ]; then
+            echo "AIDL was not found."
             exit 1
           fi
 
-          AIDL_DIR=$(dirname "$AIDL_PATH")
+          echo "Found AIDL:"
+          echo "$AIDL"
 
-          echo "$AIDL_DIR" >> "$GITHUB_PATH"
-
-          echo "AIDL found at:"
-          echo "$AIDL_PATH"
-
-          "$AIDL_PATH" --version || true
+          echo "$(dirname "$AIDL")" >> "$GITHUB_PATH"
 
       - name: Install Buildozer
         run: |
@@ -105,19 +103,12 @@ jobs:
           python -m pip install --upgrade cython
           python -m pip install --upgrade buildozer
 
-      - name: Check tools
+      - name: Verify build tools
         run: |
           java -version
-          javac -version
           python --version
           buildozer --version
-          adb version || true
           aidl --version || true
-
-      - name: Show project files
-        run: |
-          echo "Project files:"
-          find . -maxdepth 2 -type f | sort
 
       - name: Build APK
         run: |
@@ -125,7 +116,6 @@ jobs:
 
       - name: Find APK
         run: |
-          echo "APK files:"
           find . -type f -name "*.apk" -print
 
       - name: Upload APK
