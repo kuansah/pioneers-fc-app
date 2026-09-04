@@ -8,22 +8,62 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    name: Build Android APK
+    runs-on: ubuntu-24.04
 
     steps:
-
-      - name: Checkout
+      - name: Checkout project
         uses: actions/checkout@v4
 
-      - name: Build APK
-        uses: ArtemSBulgakov/buildozer-action@v1
-        id: build
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          workdir: .
-          buildozer_version: master
+          python-version: "3.11"
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            git \
+            zip \
+            unzip \
+            openjdk-17-jdk \
+            python3-pip \
+            autoconf \
+            automake \
+            libtool \
+            pkg-config \
+            zlib1g-dev \
+            libncurses5-dev \
+            libncursesw5-dev \
+            libtinfo5 \
+            cmake \
+            libffi-dev \
+            libssl-dev
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install --upgrade setuptools wheel
+          pip install buildozer cython
+
+      - name: Check project files
+        run: |
+          echo "Project files:"
+          find . -maxdepth 2 -type f | sort
+
+      - name: Build APK
+        run: |
+          buildozer android debug
+
+      - name: Find APK
+        run: |
+          echo "APK files:"
+          find . -type f -name "*.apk" -print
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: pioneers-fc-apk
-          path: ${{ steps.build.outputs.filename }}
+          path: bin/*.apk
+          if-no-files-found: error
