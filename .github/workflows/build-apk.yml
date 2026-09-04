@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-      - name: Checkout
+      - name: Checkout project
         uses: actions/checkout@v4
 
       - name: Set up Python
@@ -20,9 +20,10 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install dependencies
+      - name: Install system dependencies
         run: |
           sudo apt-get update
+
           sudo apt-get install -y \
             git \
             zip \
@@ -59,7 +60,7 @@ jobs:
           python -m pip install "Cython==0.29.33"
           python -m pip install --upgrade buildozer
 
-      - name: Prepare Buildozer SDK directory
+      - name: Prepare Android SDK
         run: |
           mkdir -p "$HOME/.buildozer/android/platform/android-sdk/cmdline-tools"
 
@@ -75,7 +76,7 @@ jobs:
           mv android-sdk/cmdline-tools/cmdline-tools \
              android-sdk/cmdline-tools/latest
 
-      - name: Set Android SDK
+      - name: Set Android environment
         run: |
           echo "ANDROIDSDK=$HOME/.buildozer/android/platform/android-sdk" >> "$GITHUB_ENV"
           echo "ANDROID_HOME=$HOME/.buildozer/android/platform/android-sdk" >> "$GITHUB_ENV"
@@ -84,7 +85,7 @@ jobs:
           echo "$HOME/.buildozer/android/platform/android-sdk/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
           echo "$HOME/.buildozer/android/platform/android-sdk/platform-tools" >> "$GITHUB_PATH"
 
-      - name: Install Android build tools
+      - name: Install Android SDK packages
         run: |
           yes | sdkmanager --licenses || true
 
@@ -110,27 +111,51 @@ jobs:
 
           chmod +x "$AIDL"
 
-          echo "AIDL found:"
-          "$AIDL" --version
+          echo "AIDL found successfully:"
+          ls -lh "$AIDL"
+
+          echo "$(dirname "$AIDL")" >> "$GITHUB_PATH"
 
       - name: Install Android NDK
         run: |
           sdkmanager "ndk;28.2.13676358"
 
-      - name: Configure environment
+      - name: Configure Android NDK
         run: |
           echo "ANDROIDNDK=$ANDROIDSDK/ndk/28.2.13676358" >> "$GITHUB_ENV"
           echo "ANDROIDAPI=35" >> "$GITHUB_ENV"
           echo "NDKAPI=24" >> "$GITHUB_ENV"
 
+      - name: Verify build tools
+        run: |
+          echo "Java:"
+          java -version
+
+          echo "Python:"
+          python --version
+
+          echo "Buildozer:"
+          buildozer --version
+
+          echo "AIDL:"
+          which aidl
+
+          echo "AIDL file:"
+          ls -lh "$(which aidl)"
+
+      - name: Show project files
+        run: |
+          echo "Project files:"
+          find . -maxdepth 2 -type f | sort
+
       - name: Build APK
         run: |
           buildozer android debug
 
-      - name: Show APK
+      - name: Find APK
         if: always()
         run: |
-          echo "Searching for APK..."
+          echo "APK files:"
           find . -type f -name "*.apk" -print
 
       - name: Upload APK
